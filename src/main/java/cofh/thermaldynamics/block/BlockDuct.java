@@ -165,40 +165,27 @@ public class BlockDuct extends BlockTDBase implements IBlockAppearance, IConfigG
 
 			float min = getSize(state);
 			float max = 1 - min;
-			boolean xMinConnected = false;
-			boolean xMaxConnected = false;
-			boolean zMinConnected = false;
-			boolean zMaxConnected = false;
-			if (theTile.getVisualConnectionType(0).renderDuct) { //todo restructure this so less (0-3) bounding boxes need to be created
-				bb = new AxisAlignedBB(min, 0.0F, min, max, max, max);
+			boolean yMinConnected = theTile.getVisualConnectionType(0).renderDuct;;
+			boolean yMaxConnected = theTile.getVisualConnectionType(1).renderDuct;
+			boolean zMinConnected = theTile.getVisualConnectionType(2).renderDuct;
+			boolean zMaxConnected = theTile.getVisualConnectionType(3).renderDuct;
+			boolean xMinConnected = theTile.getVisualConnectionType(4).renderDuct;
+			boolean xMaxConnected = theTile.getVisualConnectionType(5).renderDuct;
+
+			if (xMinConnected || xMaxConnected) {
+				bb = new AxisAlignedBB(xMinConnected ? 0 : min, min, min, xMaxConnected ? 1 : max, max, max);
 				addCollisionBoxToList(pos, entityBox, collidingBoxes, bb);
 			}
-			if (theTile.getVisualConnectionType(1).renderDuct) {
-				bb = new AxisAlignedBB(min, min, min, max, 1.0F, max);
+			if (yMinConnected || yMaxConnected) {
+				bb = new AxisAlignedBB(min, yMinConnected ? 0 : min, min, max, yMaxConnected ? 1 : max, max);
 				addCollisionBoxToList(pos, entityBox, collidingBoxes, bb);
 			}
-			if (theTile.getVisualConnectionType(2).renderDuct) {
-				zMinConnected = true;
-				bb = new AxisAlignedBB(min, min, 0.0F, max, max, max);
-				addCollisionBoxToList(pos, entityBox, collidingBoxes, bb);
-			}
-			if (theTile.getVisualConnectionType(3).renderDuct) {
-				zMaxConnected = true;
-				bb = new AxisAlignedBB(min, min, min, max, max, 1.0F);
-				addCollisionBoxToList(pos, entityBox, collidingBoxes, bb);
-			}
-			if (theTile.getVisualConnectionType(4).renderDuct) {
-				xMinConnected = true;
-				bb = new AxisAlignedBB(0.0F, min, min, max, max, max);
-				addCollisionBoxToList(pos, entityBox, collidingBoxes, bb);
-			}
-			if (theTile.getVisualConnectionType(5).renderDuct) {
-				xMaxConnected = true;
-				bb = new AxisAlignedBB(min, min, min, 1.0F, max, max);
+			if (zMinConnected || zMaxConnected) {
+				bb = new AxisAlignedBB(min, min, zMinConnected ? 0 : min, max, max, zMaxConnected ? 1 : max);
 				addCollisionBoxToList(pos, entityBox, collidingBoxes, bb);
 			}
 
-			//Step-up-assist for ducts that are just a block under the floor
+			//Step-up-assist for ducts that are just a block under the floor todo make the duplicate code here and in onEntityWalk# into 1 reusable method
 			if (min < 0.1 || //it has to be no large duct, like a viaduct
 					!TDProps.stepUpIsEnabled || //config option needs to be enabled
 					!(TDProps.stepUpMethod == 0) || //potion method needs to be chosen
@@ -264,7 +251,7 @@ public class BlockDuct extends BlockTDBase implements IBlockAppearance, IConfigG
 						(!world.isOutsideBuildHeight(pos.up(3)) && world.getBlockState(posNeighbourUp.up(2)).isFullBlock())) { //2 blocks above that full block need to be non-full
 					continue;
 				}
-				
+
 				EntityLivingBase entityLiving = (EntityLivingBase )entity;
 				Potion potion = Potion.getPotionById(8); //todo get the jump-boost/leaping potion by resource location instead
 				if (potion == null) {
@@ -277,7 +264,6 @@ public class BlockDuct extends BlockTDBase implements IBlockAppearance, IConfigG
 			}
 		}
 	}
-
 
 	@Override
 	public void onBlockPlacedBy(World world, BlockPos pos, IBlockState state, EntityLivingBase living, ItemStack stack) {
