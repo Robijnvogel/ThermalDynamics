@@ -27,6 +27,7 @@ import cofh.thermaldynamics.duct.entity.EntityTransport;
 import cofh.thermaldynamics.duct.entity.TransportHandler;
 import cofh.thermaldynamics.duct.fluid.PacketFluid;
 import cofh.thermaldynamics.duct.tiles.*;
+import cofh.thermaldynamics.init.TDProps;
 import cofh.thermaldynamics.proxy.ProxyClient;
 import cofh.thermaldynamics.render.DuctModelBakery;
 import net.minecraft.block.material.Material;
@@ -44,6 +45,8 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
+import net.minecraft.potion.Potion;
+import net.minecraft.potion.PotionEffect;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.*;
 import net.minecraft.util.math.AxisAlignedBB;
@@ -144,10 +147,7 @@ public class BlockDuct extends BlockTDBase implements IBlockAppearance, IConfigG
 		if (entity instanceof EntityTransport) {
 			return;
 		}
-		float min = getSize(state);
-		float max = 1 - min;
-
-		AxisAlignedBB bb = new AxisAlignedBB(min, min, min, max, max, max);
+		AxisAlignedBB bb = getBoundingBox(state, world, pos);
 		addCollisionBoxToList(pos, entityBox, collidingBoxes, bb);
 		TileGrid theTile = (TileGrid) world.getTileEntity(pos);
 
@@ -162,7 +162,14 @@ public class BlockDuct extends BlockTDBase implements IBlockAppearance, IConfigG
 					cover.addCollisionBoxesToList(entityBox, collidingBoxes, entity);
 				}
 			}
-			if (theTile.getVisualConnectionType(0).renderDuct) {
+
+			float min = getSize(state);
+			float max = 1 - min;
+			boolean xMinConnected = false;
+			boolean xMaxConnected = false;
+			boolean zMinConnected = false;
+			boolean zMaxConnected = false;
+			if (theTile.getVisualConnectionType(0).renderDuct) { //todo restructure this so less (0-3) bounding boxes need to be created
 				bb = new AxisAlignedBB(min, 0.0F, min, max, max, max);
 				addCollisionBoxToList(pos, entityBox, collidingBoxes, bb);
 			}
@@ -171,23 +178,106 @@ public class BlockDuct extends BlockTDBase implements IBlockAppearance, IConfigG
 				addCollisionBoxToList(pos, entityBox, collidingBoxes, bb);
 			}
 			if (theTile.getVisualConnectionType(2).renderDuct) {
+				zMinConnected = true;
 				bb = new AxisAlignedBB(min, min, 0.0F, max, max, max);
 				addCollisionBoxToList(pos, entityBox, collidingBoxes, bb);
 			}
 			if (theTile.getVisualConnectionType(3).renderDuct) {
+				zMaxConnected = true;
 				bb = new AxisAlignedBB(min, min, min, max, max, 1.0F);
 				addCollisionBoxToList(pos, entityBox, collidingBoxes, bb);
 			}
 			if (theTile.getVisualConnectionType(4).renderDuct) {
+				xMinConnected = true;
 				bb = new AxisAlignedBB(0.0F, min, min, max, max, max);
 				addCollisionBoxToList(pos, entityBox, collidingBoxes, bb);
 			}
 			if (theTile.getVisualConnectionType(5).renderDuct) {
+				xMaxConnected = true;
 				bb = new AxisAlignedBB(min, min, min, 1.0F, max, max);
 				addCollisionBoxToList(pos, entityBox, collidingBoxes, bb);
 			}
+
+			//Step-up-assist for ducts that are just a block under the floor
+			if (min < 0.1 || //it has to be no large duct, like a viaduct
+					!TDProps.stepUpIsEnabled || //config option needs to be enabled
+					!(TDProps.stepUpMethod == 0) || //potion method needs to be chosen
+					world.isOutsideBuildHeight(pos.up()) || //duct needs to be at least one below max build height, otherwise this feature doesn't help anyone
+					!(world.getBlockState(pos.up()).getCollisionBoundingBox(world, pos.up()) == NULL_AABB) ||
+					(!world.isOutsideBuildHeight(pos.up(2)) && !(world.getBlockState(pos.up(2)).getCollisionBoundingBox(world, pos.up(2)) == NULL_AABB)) || //2 blocks above the duct need to be unobstructed
+					(!world.isOutsideBuildHeight(pos.up(3)) && world.getBlockState(pos.up(3)).isFullBlock())) { //3rd block above the duct can't be a full block
+				return;
+			}
+
+			int ductX = pos.getX();
+			int ductY = pos.getY();
+			int ductZ = pos.getZ();
+			for (int i = 0; i < 2; i++) { //0 and 1
+				for (int j = 0; j < 2; j++) { //0 and 1
+					int relativeX = i == 0 ? 0 : j == 0 ? -1 : 1; //0, 0, -1 and 1
+					int relativeZ = i == 1 ? 0 : j == 0 ? -1 : 1; //-1, 1, 0 and 0
+					BlockPos posNeighbourUp = new BlockPos(ductX + relativeX, ductY + 1, ductZ + relativeZ);
+					if (!world.getBlockState(posNeighbourUp).isFullBlock() || //block diagonally above the duct needs to be a full block
+							(!world.isOutsideBuildHeight(pos.up(2)) && world.getBlockState(posNeighbourUp.up()).isFullBlock()) ||
+							(!world.isOutsideBuildHeight(pos.up(3)) && world.getBlockState(posNeighbourUp.up(2)).isFullBlock())) { //2 blocks above that full block need to be non-full
+						continue;
+					}
+
+					double xMin = relativeX == 0 ? (xMinConnected ? 0 : min) : relativeX == 1 ? 0.95 : 0;
+					double xMax = relativeX == 0 ? (xMaxConnected ? 1 : max) : relativeX == 1 ? 1 : 0.05;
+					double zMin = relativeZ == 0 ? (zMinConnected ? 0 : min) : relativeZ == 1 ? 0.95 : 0;
+					double zMax = relativeZ == 0 ? (zMaxConnected ? 1 : max) : relativeZ == 1 ? 1 : 0.05;
+
+					bb = new AxisAlignedBB(xMin, 0.95, zMin, xMax, 1.0, zMax);
+					addCollisionBoxToList(pos, entityBox, collidingBoxes, bb);
+				}
+			}
 		}
 	}
+
+	@Override
+	public void onEntityWalk(World world, BlockPos pos, Entity entity) {
+		super.onEntityWalk(world, pos, entity);
+
+		//Step-up-assist for ducts that are just a block under the floor
+		if (getSize(world.getBlockState(pos)) < 0.1 || //it has to be no large duct, like a viaduct
+				!TDProps.stepUpIsEnabled || //config option needs to be enabled
+				!(TDProps.stepUpMethod == 1) || //potion method needs to be chosen
+				world.isOutsideBuildHeight(pos.up()) || //duct needs to be at least one below max build height, otherwise this feature doesn't help anyone
+				!(entity instanceof EntityLivingBase) ||
+				!(world.getBlockState(pos.up()).getCollisionBoundingBox(world, pos.up()) == NULL_AABB) ||
+				(!world.isOutsideBuildHeight(pos.up(2)) && !(world.getBlockState(pos.up(2)).getCollisionBoundingBox(world, pos.up(2)) == NULL_AABB)) || //2 blocks above the duct need to be unobstructed
+				(!world.isOutsideBuildHeight(pos.up(3)) && world.getBlockState(pos.up(3)).isFullBlock())) { //3rd block above the duct can't be a full block
+			return;
+		}
+
+		int ductX = pos.getX();
+		int ductY = pos.getY();
+		int ductZ = pos.getZ();
+		for (int i = 0; i < 2; i++) { //0 and 1
+			for (int j = 0; j < 2; j++) { //0 and 1
+				int relativeX = i == 0 ? 0 : j == 0 ? -1 : 1; //0, 0, -1 and 1
+				int relativeZ = i == 1 ? 0 : j == 0 ? -1 : 1; //-1, 1, 0 and 0
+				BlockPos posNeighbourUp = new BlockPos(ductX + relativeX, ductY + 1, ductZ + relativeZ);
+				if (!world.getBlockState(posNeighbourUp).isFullBlock() || //block diagonally above the duct needs to be a full block
+						(!world.isOutsideBuildHeight(pos.up(2)) && world.getBlockState(posNeighbourUp.up()).isFullBlock()) ||
+						(!world.isOutsideBuildHeight(pos.up(3)) && world.getBlockState(posNeighbourUp.up(2)).isFullBlock())) { //2 blocks above that full block need to be non-full
+					continue;
+				}
+				
+				EntityLivingBase entityLiving = (EntityLivingBase )entity;
+				Potion potion = Potion.getPotionById(8); //todo get the jump-boost/leaping potion by resource location instead
+				if (potion == null) {
+					ThermalDynamics.LOG.error("potion for id 8 not found");
+				} else {
+					//entityLiving.stepHeight = 1.52F; //this doesn't work very well imo, as you'd have to manually reset it somehow and this also makes you automatically escape the shallow hole as you walk into the edge of it while you may not want to.
+					entityLiving.addPotionEffect(new PotionEffect(potion, 10)); //duration is in ticks, I guess?
+				}
+				return;
+			}
+		}
+	}
+
 
 	@Override
 	public void onBlockPlacedBy(World world, BlockPos pos, IBlockState state, EntityLivingBase living, ItemStack stack) {

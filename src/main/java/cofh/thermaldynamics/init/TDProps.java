@@ -48,6 +48,15 @@ public class TDProps {
 		String category;
 		String comment;
 
+		/* MISC */
+		category = "Misc";
+
+		comment = "If TRUE, Thermal Dynamics Ducts will help you jump out of shallow holes with ducts at the bottom.";
+		stepUpIsEnabled = ThermalDynamics.CONFIG.getConfiguration().getBoolean("stepUpIsEnabled", category, false, comment);
+
+		comment = "What method of StepUp to use. 0 for custom bounding boxes. 1 for a very temporary Leap potion effect.";
+		stepUpMethod = (short) ThermalDynamics.CONFIG.getConfiguration().getInt("stepUpMethod", category, 0, 0, 1, comment);
+
 		/* GRAPHICS */
 		category = "Render";
 
@@ -171,5 +180,7 @@ public class TDProps {
 	/* MISC */
 	public static boolean enableCoverCreativeTab = true;
 	public static boolean showCoversInJEI = false;
+	public static boolean stepUpIsEnabled = false;
+	public static short stepUpMethod = 0;
 
 }
