@@ -75,6 +75,7 @@ public class BlockDuct extends BlockTDBase implements IBlockAppearance, IConfigG
 
 	public static final PropertyInteger META = new PropertyInteger("meta", 15);
 	public static final ThreadLocal<BlockPos> IGNORE_RAY_TRACE = new ThreadLocal<>();
+	public static final int[][] NEIGHBOUR_XZ_ARRAY = { {1, 0}, {-1, 0}, {0, 1}, {0, -1} }; //relative x and z coordinates of four neighbouring blocks
 	public int offset;
 
 	public BlockDuct(int offset) {
@@ -196,28 +197,23 @@ public class BlockDuct extends BlockTDBase implements IBlockAppearance, IConfigG
 				return;
 			}
 
-			int ductX = pos.getX();
-			int ductY = pos.getY();
-			int ductZ = pos.getZ();
-			for (int i = 0; i < 2; i++) { //0 and 1
-				for (int j = 0; j < 2; j++) { //0 and 1
-					int relativeX = i == 0 ? 0 : j == 0 ? -1 : 1; //0, 0, -1 and 1
-					int relativeZ = i == 1 ? 0 : j == 0 ? -1 : 1; //-1, 1, 0 and 0
-					BlockPos posNeighbourUp = new BlockPos(ductX + relativeX, ductY + 1, ductZ + relativeZ);
-					if (!world.getBlockState(posNeighbourUp).isFullBlock() || //block diagonally above the duct needs to be a full block
-							(!world.isOutsideBuildHeight(pos.up(2)) && world.getBlockState(posNeighbourUp.up()).isFullBlock()) ||
-							(!world.isOutsideBuildHeight(pos.up(3)) && world.getBlockState(posNeighbourUp.up(2)).isFullBlock())) { //2 blocks above that full block need to be non-full
-						continue;
-					}
-
-					double xMin = relativeX == 0 ? (xMinConnected ? 0 : min) : relativeX == 1 ? 0.95 : 0;
-					double xMax = relativeX == 0 ? (xMaxConnected ? 1 : max) : relativeX == 1 ? 1 : 0.05;
-					double zMin = relativeZ == 0 ? (zMinConnected ? 0 : min) : relativeZ == 1 ? 0.95 : 0;
-					double zMax = relativeZ == 0 ? (zMaxConnected ? 1 : max) : relativeZ == 1 ? 1 : 0.05;
-
-					bb = new AxisAlignedBB(xMin, 0.95, zMin, xMax, 1.0, zMax);
-					addCollisionBoxToList(pos, entityBox, collidingBoxes, bb);
+			for (int[] xzPair : NEIGHBOUR_XZ_ARRAY) { //this iterates over 4 values
+				int relativeX = xzPair[0];
+				int relativeZ = xzPair[1];
+				BlockPos posNeighbourUp = pos.add(relativeX, 1, relativeZ);
+				if (!world.getBlockState(posNeighbourUp).isFullBlock() || //block diagonally above the duct needs to be a full block
+						(!world.isOutsideBuildHeight(pos.up(2)) && world.getBlockState(posNeighbourUp.up()).isFullBlock()) ||
+						(!world.isOutsideBuildHeight(pos.up(3)) && world.getBlockState(posNeighbourUp.up(2)).isFullBlock())) { //2 blocks above that full block need to be non-full
+					continue;
 				}
+
+				double xMin = relativeX == 0 ? (xMinConnected ? 0 : min) : relativeX == 1 ? 0.95 : 0;
+				double xMax = relativeX == 0 ? (xMaxConnected ? 1 : max) : relativeX == 1 ? 1 : 0.05;
+				double zMin = relativeZ == 0 ? (zMinConnected ? 0 : min) : relativeZ == 1 ? 0.95 : 0;
+				double zMax = relativeZ == 0 ? (zMaxConnected ? 1 : max) : relativeZ == 1 ? 1 : 0.05;
+
+				bb = new AxisAlignedBB(xMin, 0.95, zMin, xMax, 1.0, zMax);
+				addCollisionBoxToList(pos, entityBox, collidingBoxes, bb);
 			}
 		}
 	}
@@ -238,30 +234,25 @@ public class BlockDuct extends BlockTDBase implements IBlockAppearance, IConfigG
 			return;
 		}
 
-		int ductX = pos.getX();
-		int ductY = pos.getY();
-		int ductZ = pos.getZ();
-		for (int i = 0; i < 2; i++) { //0 and 1
-			for (int j = 0; j < 2; j++) { //0 and 1
-				int relativeX = i == 0 ? 0 : j == 0 ? -1 : 1; //0, 0, -1 and 1
-				int relativeZ = i == 1 ? 0 : j == 0 ? -1 : 1; //-1, 1, 0 and 0
-				BlockPos posNeighbourUp = new BlockPos(ductX + relativeX, ductY + 1, ductZ + relativeZ);
-				if (!world.getBlockState(posNeighbourUp).isFullBlock() || //block diagonally above the duct needs to be a full block
-						(!world.isOutsideBuildHeight(pos.up(2)) && world.getBlockState(posNeighbourUp.up()).isFullBlock()) ||
-						(!world.isOutsideBuildHeight(pos.up(3)) && world.getBlockState(posNeighbourUp.up(2)).isFullBlock())) { //2 blocks above that full block need to be non-full
-					continue;
-				}
-
-				EntityLivingBase entityLiving = (EntityLivingBase )entity;
-				Potion potion = Potion.getPotionById(8); //todo get the jump-boost/leaping potion by resource location instead
-				if (potion == null) {
-					ThermalDynamics.LOG.error("potion for id 8 not found");
-				} else {
-					//entityLiving.stepHeight = 1.52F; //this doesn't work very well imo, as you'd have to manually reset it somehow and this also makes you automatically escape the shallow hole as you walk into the edge of it while you may not want to.
-					entityLiving.addPotionEffect(new PotionEffect(potion, 10)); //duration is in ticks, I guess?
-				}
-				return;
+		for (int[] xzPair : NEIGHBOUR_XZ_ARRAY) { //this iterates over 4 values
+			int relativeX = xzPair[0];
+			int relativeZ = xzPair[1];
+			BlockPos posNeighbourUp = pos.add(relativeX, 1, relativeZ);
+			if (!world.getBlockState(posNeighbourUp).isFullBlock() || //block diagonally above the duct needs to be a full block
+					(!world.isOutsideBuildHeight(pos.up(2)) && world.getBlockState(posNeighbourUp.up()).isFullBlock()) ||
+					(!world.isOutsideBuildHeight(pos.up(3)) && world.getBlockState(posNeighbourUp.up(2)).isFullBlock())) { //2 blocks above that full block need to be non-full
+				continue;
 			}
+
+			EntityLivingBase entityLiving = (EntityLivingBase )entity;
+			Potion potion = Potion.getPotionById(8); //todo get the jump-boost/leaping potion by resource location instead
+			if (potion == null) {
+				ThermalDynamics.LOG.error("potion for id 8 not found");
+			} else {
+				//entityLiving.stepHeight = 1.52F; //this doesn't work very well imo, as you'd have to manually reset it somehow and this also makes you automatically escape the shallow hole as you walk into the edge of it while you may not want to.
+				entityLiving.addPotionEffect(new PotionEffect(potion, 10)); //duration is in ticks, I guess?
+			}
+			return;
 		}
 	}
 
